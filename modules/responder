@@ -230,7 +230,7 @@ function stop {
 }
 
 function status {
-  if ps | grep -w -q "$RESPROOT"/Responder/Responder.py; then echo "1"; else echo "0"; fi
+  if ps | grep -w -q [/]sd/Responder/Responder.py; then echo "1"; else echo "0"; fi
 }
 
 function check_internet {
