@@ -51,7 +51,7 @@ function stop {
 }
 
 function status {
-  if pgrep nmap > /dev/null; then echo "1"; else echo "0"; fi
+  if pgrep /usr/bin/nmap > /dev/null; then echo "1"; else echo "0"; fi
 }
 
 function target {
