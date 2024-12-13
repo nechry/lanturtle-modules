@@ -161,7 +161,7 @@ function start {
             ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
           fi
           
-          echo "python "$RESPROOT"/Responder/Responder.py $mode -I $responder_interface" | at now
+          echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface" | at now
           echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sshfs/Responder"
           echo "Logs can be viewed at Configure > log > View log"
         else 
@@ -186,7 +186,7 @@ function start {
           ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
         fi
         
-        echo "python "$RESPROOT"/Responder/Responder.py $mode -I $responder_interface &" | at now
+        echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface &" | at now
         echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /tmp/Responder"
         echo "Responder started with pid"
         pgrep -f Responder.py
@@ -209,7 +209,7 @@ function start {
           ln -s /sd/Responder/logs /etc/turtle/Responder/logs
         fi
         
-        echo "python "$RESPROOT"/Responder/Responder.py $mode -I $responder_interface" | at now
+        echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface" | at now
         echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sd/Responder"
         echo "Logs can be viewed at Configure > log > View log"        
         ;;
@@ -237,7 +237,7 @@ function stop {
 }
 
 function status {
-  if ps | grep -w -q [/]etc/turtle/Responder/Responder.py; then echo "1"; else echo "0"; fi
+  if ps | grep -w -q "$RESPROOT"/Responder/Responder.py; then echo "1"; else echo "0"; fi
 }
 
 function check_internet {
