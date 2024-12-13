@@ -19,7 +19,7 @@ function start {
     sshfs_user=$(uci get sshfs.user)
     sshfs_path=$(uci get sshfs.path)
     echo sshfs -o idmap=user -C -p "$sshfs_port" "$sshfs_user"@"$sshfs_host":"$sshfs_path" /sshfs/
-    sshfs -o idmap=user -C -p "$sshfs_port" "$sshfs_user"@"$sshfs_host":"$sshfs_path" /sshfs/
+    /usr/bin/sshfs -o idmap=user -C -p "$sshfs_port" "$sshfs_user"@"$sshfs_host":"$sshfs_path" /sshfs/
     echo -n "sshfs started with pid: "; pidof sshfs
   else
     touch /etc/config/sshfs
