@@ -8,6 +8,12 @@ DESCRIPTION="Responder - LLMNR, NBT-NS and MDNS poisoner"
 CONF=/tmp/responder.form
 AUTHOR=IMcPwn
 
+RESPTEMPDL="/tmp/ResponderDownload"
+RESPURL="https://github.com/lgandx/Responder/archive/refs/tags/v3.0.6.0.zip"
+
+RESPROOT="/sd"
+LOOTDIR=$RESPROOT"/loot/quickcreds"
+
 : ${DIALOG_OK=0}
 : ${DIALOG_CANCEL=1}
 : ${DIALOG_HELP=2}
@@ -97,12 +103,23 @@ function start {
       opkg update > /dev/null && opkg install python-openssl
     fi
     
-    if [[ ! -d /etc/turtle/Responder || ! -s /etc/turtle/Responder/Responder.py || ! -s /etc/turtle/Responder/Responder.conf ]];
+    # Check if Responder is installed (not the module available in the Turtle "GUI", but the tool taken straight from GitHub)
+    if [[ ! -d "$RESPROOT"/Responder || ! -s "$RESPROOT"/Responder/Responder.py || ! -s "$RESPROOT"/Responder/Responder.conf ]];
     then
       echo "Required Responder files not found. Downloading..."
       check_internet
-      rm -rf /etc/turtle/Responder
-      git clone git://github.com/lgandx/Responder /etc/turtle/Responder -q
+      # Clean up
+      /bin/rm -rf "$RESPROOT"/Responder/
+      /bin/rm -rf "$RESPTEMPDL"/master.zip*
+      # Create new
+      /bin/mkdir -p "$RESPTEMPDL"
+      # Download and extract
+      /usr/bin/wget --progress=dot "$RESPURL" -O "$RESPTEMPDL"/master.zip 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
+      # Unpack the GitHub download
+      /usr/bin/unzip "$RESPTEMPDL"/master.zip -d "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Unpacking dependency responder" 14 72
+      /bin/mv "$RESPTEMPDL"/Responder-3.0.6.0 "$RESPTEMPDL"/Responder
+      /bin/mv "$RESPTEMPDL"/Responder "$RESPROOT"/
+      /bin/rm -rf "$RESPTEMPDL"/master.zip*
     fi
     
     case $responder_mode in
@@ -132,19 +149,18 @@ function start {
             enable_iptables
           fi
           
-          if [ -s /etc/turtle/Responder/Responder.db ]; 
+          if [ -s "$RESPROOT"/Responder/Responder.db ]; 
           then
-            rm -f /etc/turtle/Responder/Responder.db
+            rm -f "$RESPROOT"/Responder/Responder.db
           fi
           
-          if [[ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
+          if [[ $(readlink "$RESPROOT"/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
           then
-            rm -rf /etc/turtle/Responder/logs
-            mkdir -p /sshfs/Responder/logs
-            ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+            rm -rf "$RESPROOT"/Responder/logs
+            mkdir -p /sshfs/Responder/logs            
           fi
           
-          echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface" | at now
+          echo "python "$RESPROOT"/Responder/Responder.py $mode -I $responder_interface" | at now
           echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sshfs/Responder"
           echo "Logs can be viewed at Configure > log > View log"
         else 
@@ -158,21 +174,41 @@ function start {
           enable_iptables
         fi
         
-        if [ -s /etc/turtle/Responder/Responder.db ]; 
+        if [ -s "$RESPROOT"/Responder/Responder.db ]; 
         then
-          rm -f /etc/turtle/Responder/Responder.db
+          rm -f "$RESPROOT"/Responder/Responder.db
         fi
         
-        if [[ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
-          rm -rf /etc/turtle/Responder/logs
-          mkdir -p /tmp/Responder/logs
-          ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+        if [[ $(readlink "$RESPROOT"/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
+          rm -rf "$RESPROOT"/Responder/logs
+          mkdir -p /tmp/Responder/logs          
         fi
         
-        echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface &" | at now
+        echo "python "$RESPROOT"/Responder/Responder.py $mode -I $responder_interface &" | at now
         echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /tmp/Responder"
         echo "Responder started with pid"
         pgrep -f Responder.py
+        ;;
+      sd)
+        if [[ $responder_interface == "eth1" ]];
+        then
+          enable_iptables
+        fi
+        
+        if [ -s "$RESPROOT"/Responder/Responder.db ]; 
+        then
+          rm -f "$RESPROOT"/Responder/Responder.db
+        fi
+        
+        if [[ $(readlink "$RESPROOT"/Responder/logs) != "/sd/Responder/logs" || ! -d /sd/Responder/logs ]]; 
+        then
+          rm -rf "$RESPROOT"/Responder/logs
+          mkdir -p "$RESPROOT"/Responder/logs          
+        fi
+        
+        echo "python "$RESPROOT"/Responder/Responder.py $mode -I $responder_interface" | at now
+        echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sshfs/Responder"
+        echo "Logs can be viewed at Configure > log > View log"        
         ;;
       *)
         echo "Responder configuration not valid."
@@ -220,6 +256,7 @@ dialog --ok-label "Submit" \
 The log files can be saved to SSHFS or tmp.\n" 16 60 3\
     1 "Save log to SSHFS if available." off\
     2 "Save log to /tmp" off\
+    3 "Save log to /sd" off\
   2>$CONF
   return=$?
   case $return in
@@ -232,6 +269,10 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
           ;;
         2)
           uci set responder.log="tmp"
+          uci commit responder
+          ;;
+        3)
+          uci set responder.log="sd"
           uci commit responder
           ;;
   esac
@@ -248,6 +289,9 @@ The log files can be saved to SSHFS or tmp.\n" 16 60 3\
         ;;
       tmp)
         dialog --title "/tmp/Responder/logs/Responder-Session.log" --clear --tailbox "/tmp/Responder/logs/Responder-Session.log" 18 72
+        ;;
+      sd)
+        dialog --title "/sd/Responder/logs/Responder-Session.log" --clear --tailbox "/sd/Responder/logs/Responder-Session.log" 18 72
         ;;
       *)
         echo "Responder log location not configured."
@@ -363,14 +407,14 @@ mode
 function responderconf {
 dialog \
     --help-button \
-    --title "Editing: /etc/turtle/Responder/Responder.conf" \
-    --editbox /etc/turtle/Responder/Responder.conf 18 72\
+    --title "Editing: "$RESPROOT"/Responder/Responder.conf" \
+    --editbox "$RESPROOT"/Responder/Responder.conf 18 72\
   2>$CONF
   return=$?
   case $return in
     $DIALOG_OK)
       cat $CONF | {
-        cat $CONF > /etc/turtle/Responder/Responder.conf
+        cat $CONF > "$RESPROOT"/Responder/Responder.conf
         rm $CONF
         configure
       };;
