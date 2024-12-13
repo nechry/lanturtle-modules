@@ -154,11 +154,11 @@ function start {
             rm -f "$RESPROOT"/Responder/Responder.db
           fi
           
-          if [[ $(readlink /etc/turtle/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
+          if [[ $(readlink "$RESPROOT"/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
           then
-            rm -rf /etc/turtle/Responder/logs
+            rm -rf "$RESPROOT"/Responder/logs
             mkdir -p /sshfs/Responder/logs
-            ln -s /sshfs/Responder/logs /etc/turtle/Responder/logs
+            ln -s /sshfs/Responder/logs "$RESPROOT"/Responder/logs
           fi
           
           echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface" | at now
@@ -180,10 +180,10 @@ function start {
           rm -f "$RESPROOT"/Responder/Responder.db
         fi
         
-        if [[ $(readlink /etc/turtle/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
-          rm -rf /etc/turtle/Responder/logs
+        if [[ $(readlink "$RESPROOT"/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
+          rm -rf "$RESPROOT"/Responder/logs
           mkdir -p /tmp/Responder/logs          
-          ln -s /tmp/Responder/logs /etc/turtle/Responder/logs
+          ln -s /tmp/Responder/logs "$RESPROOT"/Responder/logs
         fi
         
         echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface &" | at now
@@ -201,14 +201,7 @@ function start {
         then
           rm -f "$RESPROOT"/Responder/Responder.db
         fi
-        
-        if [[ $(readlink /etc/turtle/Responder/logs) != "/sd/Responder/logs" || ! -d /sd/Responder/logs ]]; 
-        then
-          rm -rf /etc/turtle/Responder/logs
-          mkdir -p "$RESPROOT"/Responder/logs          
-          ln -s /sd/Responder/logs /etc/turtle/Responder/logs
-        fi
-        
+               
         echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface" | at now
         echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sd/Responder"
         echo "Logs can be viewed at Configure > log > View log"        
