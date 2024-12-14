@@ -184,7 +184,8 @@ function start {
     echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface &" | at now
     # display message
     echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /$responder_log/Responder"
-    echo "Logs can be viewed at Configure > log > View log"
+    #echo "Logs can be viewed at Configure > log > View log"
+    sleep 1
     echo "Responder started with pid: $(pgrep -f Responder.py)"
   else
     echo "Responder not configured."
@@ -196,13 +197,16 @@ function stop {
   responder_interface=$(uci get responder.interface)
   if [[ $responder_interface == "eth1" ]]; then
     disable_iptables
+    echo "iptables rules restored"
   fi
-  if pgrep -f Responder.py >/dev/null; then kill $(pgrep -f Responder.py); fi
-  echo "Responder stopped"
+  if pgrep -f Responder.py >/dev/null; then
+    kill $(pgrep -f Responder.py)
+    echo "Responder stopped"
+  fi
 }
 
 function status {
-    if [[ $(/bin/ps | /bin/grep -w [R]esponder.py) ]]; then /bin/echo "1"; else /bin/echo "0"; fi
+  if pgrep -f Responder.py >/dev/null; then /bin/echo "1"; else /bin/echo "0"; fi
 }
 
 function check_internet {
