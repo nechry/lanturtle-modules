@@ -202,7 +202,7 @@ function stop {
 }
 
 function status {
-  if ps | grep -w -q [/]$RESPROOT/Responder/Responder.py; then echo "1"; else echo "0"; fi
+    if [[ $(/bin/ps | /bin/grep -w [R]esponder.py) ]]; then /bin/echo "1"; else /bin/echo "0"; fi
 }
 
 function check_internet {
