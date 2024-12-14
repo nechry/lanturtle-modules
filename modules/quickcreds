@@ -168,6 +168,7 @@ function start {
 
 function stop {
     /bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
+    /bin/bash /usr/lib/turtle/turtle_module /etc/turtle/modules/quickcreds STOP
     /etc/init.d/dnsmasq start 1 &>/dev/null
     /bin/echo "QuickCreds Stopped"
 }
