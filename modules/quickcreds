@@ -174,5 +174,5 @@ function stop {
 }
 
 function status {
-    if [[ $(/bin/ps | /bin/grep -w [R]esponder.py) ]]; then /bin/echo "1"; else /bin/echo "0"; fi
+    if pgrep -f Responder.py >/dev/null; then /bin/echo "1"; else /bin/echo "0"; fi
 }
