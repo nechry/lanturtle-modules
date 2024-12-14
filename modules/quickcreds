@@ -167,8 +167,9 @@ function start {
 }
 
 function stop {
-    /bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
-    /bin/bash /usr/lib/turtle/turtle_module /etc/turtle/modules/quickcreds STOP
+    if pgrep -f Responder.py >/dev/null; then
+        /bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
+    fi
     /etc/init.d/dnsmasq start 1 &>/dev/null
     /bin/echo "QuickCreds Stopped"
 }
