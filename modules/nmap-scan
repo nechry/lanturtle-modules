@@ -3,6 +3,7 @@ VERSION="1.1"
 DESCRIPTION="Network Mapper discovers hosts and services on a network"
 CONF=/tmp/blank.form
 OUTPUT=/tmp/nmap.out
+LOG=/tmp/
 
 : ${DIALOG_OK=0}
 : ${DIALOG_CANCEL=1}
@@ -40,7 +41,7 @@ function start {
     esac
     DATE=$(date +"%Y-%m-%d_%H-%M")
     echo "Executing: nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log"
-    echo "nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log" | at now
+    echo "/usr/bin/nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log" | at now
   else
     echo "nmap not configured"
   fi
@@ -176,13 +177,13 @@ function execute {
     nmap_profile=$(uci get nmap.profile)
     nmap_log=$(uci get nmap.log)
     if [ -z "$nmap_target" ]; then
-      echo "nmap module missig target configuration";exit
+      echo "nmap module missing target configuration";exit
     fi
     if [ -z "$nmap_profile" ]; then
-      echo "nmap module missig profile configuration";exit
+      echo "nmap module missing profile configuration";exit
     fi
     if [ -z "$nmap_log" ]; then
-      echo "nmap module missig log configuration";exit
+      echo "nmap module missing log configuration";exit
     fi
     case $nmap_profile in
       1) PROFILE="-T4 -A -v";;
@@ -201,7 +202,7 @@ function execute {
     response=$?
     case $response in
       0) 
-        echo "nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log" | at now
+        echo "/usr/bin/nmap $PROFILE $nmap_target > $nmap_log/nmap_$DATE.log" | at now
         dialog --title "nmap results (this may take a while)" --clear --tailbox "$nmap_log/nmap_$DATE.log" 18 72
         configure
       ;;
